@@ -157,6 +157,7 @@
 
         <!-- Tela Principal -->
         <div id="main-screen" class="screen">
+            <h2>Bem-vindo, <span id="user-name"></span></h2>
             <input type="text" id="manual-id" placeholder="ID do Sorteio">
             <button onclick="promptForNameAfterManual()">Buscar</button>
             <button onclick="startQrScanner()">Escanear QR Code</button>
@@ -236,11 +237,12 @@
         function showMain() {
             showScreen('main-screen');
             renderSaved();
+            if (userData) {
+                document.getElementById('user-name').textContent = userData.nome;
+                renderPurchasedCards();
+            }
             if (pointId) {
                 fetchAvailableCards();
-            }
-            if (userData) {
-                renderPurchasedCards();
             }
         }
 
