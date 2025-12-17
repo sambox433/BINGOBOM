@@ -76,6 +76,17 @@
             flex-wrap: wrap;
             justify-content: center;
         }
+        .neo-card {
+            background: #f0f8ff;
+            border-radius: 10px;
+            box-shadow:  5px 5px 10px #d3dbe3, 
+                        -5px -5px 10px #ffffff;
+            padding: 10px;
+            margin: 10px 0;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
         .ball {
             width: 30px;
             height: 30px;
@@ -102,6 +113,11 @@
             font-size: 18px;
             color: #ff4500;
         }
+        #saved-sorteios button {
+            width: auto;
+            margin: 5px;
+            background: #ff4500;
+        }
     </style>
 </head>
 <body>
@@ -127,9 +143,14 @@
 
         <!-- Tela Principal -->
         <div id="main-screen" class="screen">
+            <input type="text" id="manual-id" placeholder="ID do Sorteio">
+            <button onclick="fetchByManualId()">Buscar</button>
             <button onclick="startQrScanner()">Escanear QR Code</button>
-            <video id="qr-scanner" autoplay playsinline></video>
+            <video id="qr-scanner" autoplay playsinline style="display: none;"></video>
             <canvas id="qr-canvas" style="display:none;"></canvas>
+
+            <h2>Sorteios Salvos</h2>
+            <div id="saved-sorteios"></div>
 
             <div class="card-section">
                 <h2>Cartelas Compradas</h2>
@@ -157,6 +178,7 @@
 
     <script>
         let userData = null;
+        let userPassword = '';
         let pointId = localStorage.getItem('pointId');
         let scannerInterval = null;
         let paymentTimer = null;
@@ -191,8 +213,12 @@
 
         function showMain() {
             showScreen('main-screen');
+            renderSaved();
             if (pointId) {
                 fetchAvailableCards();
+            }
+            if (userData) {
+                renderPurchasedCards();
             }
         }
 
@@ -213,8 +239,8 @@
                 showLoading(false);
                 if (data.status) {
                     userData = data;
+                    userPassword = password;
                     showMain();
-                    renderPurchasedCards();
                 } else {
                     showNotification('Login falhou', 'error');
                 }
@@ -271,11 +297,9 @@
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const code = jsQR(imageData.data, imageData.width, imageData.height);
             if (code) {
-                pointId = code.data;
-                localStorage.setItem('pointId', pointId);
+                setPointId(code.data);
                 stopScanner();
-                showNotification('QR Code escaneado: ' + pointId);
-                fetchAvailableCards();
+                showNotification('QR Code escaneado: ' + code.data);
             }
         }
 
@@ -286,8 +310,44 @@
             video.style.display = 'none';
         }
 
+        function fetchByManualId() {
+            const id = document.getElementById('manual-id').value;
+            if (id) {
+                setPointId(id);
+            } else {
+                showNotification('Insira o ID', 'error');
+            }
+        }
+
+        function setPointId(newId) {
+            pointId = newId;
+            localStorage.setItem('pointId', pointId);
+            let saved = JSON.parse(localStorage.getItem('savedIds') || '[]');
+            if (!saved.includes(newId)) {
+                saved.push(newId);
+                localStorage.setItem('savedIds', JSON.stringify(saved));
+                renderSaved();
+            }
+            fetchAvailableCards();
+        }
+
+        function renderSaved() {
+            const container = document.getElementById('saved-sorteios');
+            container.innerHTML = '';
+            const saved = JSON.parse(localStorage.getItem('savedIds') || '[]');
+            saved.forEach(id => {
+                const btn = document.createElement('button');
+                btn.textContent = id;
+                btn.onclick = () => {
+                    pointId = id;
+                    fetchAvailableCards();
+                };
+                container.appendChild(btn);
+            });
+        }
+
         async function fetchAvailableCards() {
-            if (!pointId) return showNotification('Escaneie QR Code primeiro', 'error');
+            if (!pointId) return showNotification('Escaneie QR Code ou insira ID primeiro', 'error');
 
             showLoading();
             const url = `https://script.google.com/macros/s/AKfycbyUFCcqfKR0ph9WDvz-09OO2QhkiL_1Jtc76exshmc2tfNM9BL7yZ4wp6Q__ZrIront/exec?acao=cartelas_disponiveis&id=${pointId}`;
@@ -309,10 +369,12 @@
         function renderPurchasedCards() {
             const container = document.getElementById('purchased-cards');
             container.innerHTML = '';
-            userData.cartelas_compradas.forEach(cartela => {
-                const card = createCard(cartela, false);
-                container.appendChild(card);
-            });
+            if (userData && userData.cartelas_compradas) {
+                userData.cartelas_compradas.forEach(cartela => {
+                    const card = createCard(cartela, false);
+                    container.appendChild(card);
+                });
+            }
         }
 
         function renderAvailableCards(cartelas) {
@@ -325,14 +387,17 @@
         }
 
         function createCard(cartelaStr, isAvailable) {
+            cartelaStr = cartelaStr.replace(/\[|\]/g, '').trim();
             const div = document.createElement('div');
-            div.className = 'card';
+            div.className = isAvailable ? 'card' : 'neo-card';
             const numbers = cartelaStr.split(' ');
             numbers.forEach(num => {
-                const ball = document.createElement('div');
-                ball.className = 'ball';
-                ball.textContent = num;
-                div.appendChild(ball);
+                if (num) {
+                    const ball = document.createElement('div');
+                    ball.className = 'ball';
+                    ball.textContent = num;
+                    div.appendChild(ball);
+                }
             });
             if (isAvailable) {
                 const buyBtn = document.createElement('button');
@@ -344,10 +409,10 @@
         }
 
         async function buyCard(cartela) {
-            if (!userData || !pointId) return showNotification('Login ou QR necessário', 'error');
+            if (!userData || !pointId) return showNotification('Login ou ID necessário', 'error');
 
             showLoading();
-            const url = `https://script.google.com/macros/s/AKfycbxVLVo_YV_Lpw9uY5KwZV-ovxaLYj8LfRp9sctC5pYK2K0wzxWLpZYftB9RqAOObK9D/exec?acao=criar_pix&id=${pointId}&nome=${userData.nome}&senha=${document.getElementById('login-password').value}&cartela=${cartela}`;
+            const url = `https://script.google.com/macros/s/AKfycbxVLVo_YV_Lpw9uY5KwZV-ovxaLYj8LfRp9sctC5pYK2K0wzxWLpZYftB9RqAOObK9D/exec?acao=criar_pix&id=${pointId}&nome=${userData.nome}&senha=${userPassword}&cartela=${cartela}`;
             try {
                 const res = await fetch(url);
                 const data = await res.json();
@@ -398,7 +463,7 @@
 
         function startPaymentCheck(paymentId) {
             checkInterval = setInterval(async () => {
-                const url = `https://script.google.com/macros/s/AKfycbyUFCcqfKR0ph9WDvz-09OO2QhkiL_1Jtc76exshmc2tfNM9BL7yZ4wp6Q__ZrIront/exec?acao=confirmar_pix&id=${pointId}&payment_id=${paymentId}&nome=${userData.nome}&senha=${document.getElementById('login-password').value}`;
+                const url = `https://script.google.com/macros/s/AKfycbyUFCcqfKR0ph9WDvz-09OO2QhkiL_1Jtc76exshmc2tfNM9BL7yZ4wp6Q__ZrIront/exec?acao=confirmar_pix&id=${pointId}&payment_id=${paymentId}&nome=${userData.nome}&senha=${userPassword}`;
                 try {
                     const res = await fetch(url);
                     const data = await res.json();
