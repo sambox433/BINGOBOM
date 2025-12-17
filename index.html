@@ -290,7 +290,7 @@
             if (!pointId) return showNotification('Escaneie QR Code primeiro', 'error');
 
             showLoading();
-            const url = `https://script.google.com/macros/s/AKfycbwdYKE9uVABUqa9DNwK7guaPCOD64byCbRddbjBEDYmKXGD1SAD4bhWZxCAYI4mP75i/exec?acao=cartelas_disponiveis&id=${pointId}`;
+            const url = `https://script.google.com/macros/s/AKfycbyUFCcqfKR0ph9WDvz-09OO2QhkiL_1Jtc76exshmc2tfNM9BL7yZ4wp6Q__ZrIront/exec?acao=cartelas_disponiveis&id=${pointId}`;
             try {
                 const res = await fetch(url);
                 const data = await res.json();
