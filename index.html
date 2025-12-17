@@ -152,6 +152,9 @@
         <div id="notification" class="notification"></div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
     <script>
         let userData = null;
         let pointId = localStorage.getItem('pointId');
@@ -257,6 +260,7 @@
                     scannerInterval = setInterval(() => scanQr(video, canvas, ctx), 100);
                 })
                 .catch(err => showNotification('Erro ao acessar câmera', 'error'));
+            video.style.display = 'block';
         }
 
         function scanQr(video, canvas, ctx) {
@@ -265,7 +269,7 @@
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0);
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(imageData.data, imageData.width, imageData.height); // jsQR library needed, include via CDN or inline
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
             if (code) {
                 pointId = code.data;
                 localStorage.setItem('pointId', pointId);
@@ -366,10 +370,7 @@
         function generateQrCode(text) {
             const qrContainer = document.getElementById('payment-qr');
             qrContainer.innerHTML = '';
-            const qr = qrcode(0, 'M'); // qrcode library needed, include via CDN or inline
-            qr.addData(text);
-            qr.make();
-            qrContainer.innerHTML = qr.createImgTag(4);
+            new QRCode(qrContainer, text);
         }
 
         function copyPixCode() {
@@ -412,13 +413,7 @@
             }, 40000); // 40 seconds
         }
 
-        // Include jsQR and qrcode libraries inline or via CDN
-        // For example, add scripts:
-        // <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
-        // <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-
         if (userData) showMain();
     </script>
 </body>
-
 </html>
