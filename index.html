@@ -439,6 +439,7 @@
             div.className = isAvailable ? 'card' : 'neo-card';
             const numbers = cartelaStr.split(' ');
             numbers.forEach(num => {
+                num = num.trim();
                 if (num) {
                     const ball = document.createElement('div');
                     ball.className = 'ball';
@@ -513,8 +514,9 @@
                         clearInterval(checkInterval);
                         clearInterval(paymentTimer);
                         showNotification('Pagamento confirmado!', 'success');
-                        await login(); // Relogin to update
-                        showMain();
+                        await login(); // Relogin para atualizar userData com novas cartelas
+                        await fetchAndUpdateBalls(); // Atualiza bolas e marca nas cartelas
+                        showMain(); // Retorna para a tela principal com cartelas atualizadas
                     }
                 } catch (err) {}
             }, 40000); // 40 seconds
@@ -528,7 +530,7 @@
                 showLoading(false);
                 if (data.status && data.bolas) {
                     let bolasStr = data.bolas.replace(/\(|\)/g, '').trim();
-                    return bolasStr.split(' ').filter(b => b);
+                    return bolasStr.split(' ').filter(b => b).map(b => b.trim());
                 } else {
                     showNotification('Erro ao carregar bolas sorteadas', 'error');
                     return [];
