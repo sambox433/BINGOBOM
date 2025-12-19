@@ -122,9 +122,23 @@
             margin: 5px 0;
             border-radius: 5px;
             cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         .sorteio-item:hover {
             background: #ddd;
+        }
+        .remove-btn {
+            background: #ff4500;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .remove-btn:hover {
+            background: #cc3700;
         }
         #name-prompt-screen {
             display: none;
@@ -328,7 +342,7 @@
         async function saveSorteioWithName() {
             const name = document.getElementById('sorteio-name').value;
             if (!name) return showNotification('Insira o nome', 'error');
-            setSorteio(tempId, name);
+            await setSorteio(tempId, name);
             showMain();
             await fetchAndUpdateBalls();
         }
@@ -341,7 +355,7 @@
                 localStorage.setItem('savedSorteios', JSON.stringify(saved));
                 renderSaved();
             }
-            fetchAvailableCards();
+            await fetchAvailableCards();
             showNotification(`Sorteio "${newName}" (ID: ${newId}) salvo!`);
         }
         function renderSaved() {
@@ -351,15 +365,37 @@
             saved.forEach(sorteio => {
                 const div = document.createElement('div');
                 div.className = 'sorteio-item';
-                div.textContent = `${sorteio.name} (ID: ${sorteio.id})`;
-                div.onclick = async () => {
+                const textSpan = document.createElement('span');
+                textSpan.textContent = `${sorteio.name} (ID: ${sorteio.id})`;
+                textSpan.style.cursor = 'pointer';
+                textSpan.onclick = async () => {
                     pointId = sorteio.id;
-                    fetchAvailableCards();
+                    await fetchAvailableCards();
                     showNotification(`Carregando sorteio: ${sorteio.name}`);
                     await fetchAndUpdateBalls();
                 };
+                div.appendChild(textSpan);
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'remove-btn';
+                removeBtn.textContent = 'Remover';
+                removeBtn.onclick = () => removeSorteio(sorteio.id);
+                div.appendChild(removeBtn);
                 container.appendChild(div);
             });
+        }
+        function removeSorteio(id) {
+            let saved = JSON.parse(localStorage.getItem('savedSorteios') || '[]');
+            saved = saved.filter(s => s.id !== id);
+            localStorage.setItem('savedSorteios', JSON.stringify(saved));
+            if (pointId === id) {
+                pointId = null;
+                localStorage.removeItem('pointId');
+                drawnBalls = [];
+                document.getElementById('purchased-cards').innerHTML = '';
+                document.getElementById('available-cards').innerHTML = '';
+            }
+            renderSaved();
+            showNotification('Sorteio removido!');
         }
         async function fetchAvailableCards() {
             if (!pointId) return showNotification('Selecione um sorteio primeiro', 'error');
@@ -508,9 +544,9 @@
             const balls = await fetchDrawnBalls(pointId);
             if (balls.length > 0) {
                 drawnBalls = balls;
-                renderPurchasedCards();
-                renderAvailableCards(userData ? userData.cartelas_compradas : []); // Atualiza se necessário
             }
+            renderPurchasedCards();
+            await fetchAvailableCards(); // Re-fetch e renderiza disponíveis com bolas atualizadas
         }
         function startMonitoring() {
             if (!pointId) return showNotification('Selecione um sorteio primeiro', 'error');
