@@ -79,7 +79,7 @@
         .neo-card {
             background: #f0f8ff;
             border-radius: 10px;
-            box-shadow:  5px 5px 10px #d3dbe3, 
+            box-shadow: 5px 5px 10px #d3dbe3,
                         -5px -5px 10px #ffffff;
             padding: 10px;
             margin: 10px 0;
@@ -137,7 +137,6 @@
 <body>
     <div class="container">
         <h1>BINGO BOM</h1>
-
         <!-- Tela de Login -->
         <div id="login-screen" class="screen active">
             <input type="text" id="login-username" placeholder="Usuário">
@@ -145,7 +144,6 @@
             <button onclick="login()">Login</button>
             <button onclick="showRegister()">Cadastrar</button>
         </div>
-
         <!-- Tela de Cadastro -->
         <div id="register-screen" class="screen">
             <input type="text" id="reg-username" placeholder="Usuário">
@@ -154,7 +152,6 @@
             <button onclick="register()">Cadastrar</button>
             <button onclick="showLogin()">Voltar ao Login</button>
         </div>
-
         <!-- Tela Principal -->
         <div id="main-screen" class="screen">
             <h2>Bem-vindo, <span id="user-name"></span></h2>
@@ -163,41 +160,34 @@
             <button onclick="startQrScanner()">Escanear QR Code</button>
             <video id="qr-scanner" autoplay playsinline style="display: none;"></video>
             <canvas id="qr-canvas" style="display:none;"></canvas>
-
             <h2>Sorteios Salvos</h2>
             <div id="saved-sorteios"></div>
-
+            <button onclick="startMonitoring()">Monitorar Sorteio (Atualiza a cada 10s)</button>
             <div class="card-section">
                 <h2>Cartelas Compradas</h2>
                 <div id="purchased-cards"></div>
             </div>
-
             <div class="card-section">
                 <h2>Cartelas Disponíveis</h2>
                 <div id="available-cards"></div>
             </div>
         </div>
-
         <!-- Tela de Pagamento -->
         <div id="payment-screen" class="screen">
             <div id="payment-qr"></div>
             <button onclick="copyPixCode()">Copiar Chave PIX</button>
             <div id="countdown"></div>
         </div>
-
         <!-- Tela de Prompt para Nome -->
         <div id="name-prompt-screen" class="screen">
             <h2>Insira o Nome do Sorteio</h2>
             <input type="text" id="sorteio-name" placeholder="Nome do Sorteio">
             <button onclick="saveSorteioWithName()">Salvar</button>
         </div>
-
         <div id="notification" class="notification"></div>
     </div>
-
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-
     <script>
         let userData = null;
         let userPassword = '';
@@ -207,33 +197,29 @@
         let paymentTimer = null;
         let checkInterval = null;
         let pixCode = '';
-
+        let drawnBalls = [];
+        let monitoringInterval = null;
         function showNotification(message, type = 'success') {
             const notif = document.getElementById('notification');
             notif.textContent = message;
             notif.className = `notification ${type}`;
             setTimeout(() => { notif.textContent = ''; notif.className = 'notification'; }, 5000);
         }
-
         function showLoading(show = true) {
             const notif = document.getElementById('notification');
             notif.textContent = show ? 'Carregando...' : '';
             notif.className = show ? 'notification loading' : 'notification';
         }
-
         function showScreen(screenId) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
             document.getElementById(screenId).classList.add('active');
         }
-
         function showLogin() {
             showScreen('login-screen');
         }
-
         function showRegister() {
             showScreen('register-screen');
         }
-
         function showMain() {
             showScreen('main-screen');
             renderSaved();
@@ -245,20 +231,16 @@
                 fetchAvailableCards();
             }
         }
-
         function showPayment() {
             showScreen('payment-screen');
         }
-
         function showNamePrompt() {
             showScreen('name-prompt-screen');
         }
-
         async function login() {
             const username = document.getElementById('login-username').value;
             const password = document.getElementById('login-password').value;
             if (!username || !password) return showNotification('Preencha os campos', 'error');
-
             showLoading();
             const url = `https://script.google.com/macros/s/AKfycbwjq0it1ckhmb8mufjzPx-N3vpWoB1_RAW2stGlLCJ9CeU-Xt1YD5Uo0w0vMtIGao1z/exec?acao=login&nome=${username}&senha=${password}`;
             try {
@@ -269,6 +251,9 @@
                     userData = data;
                     userPassword = password;
                     showMain();
+                    if (pointId) {
+                        await fetchAndUpdateBalls();
+                    }
                 } else {
                     showNotification('Login falhou', 'error');
                 }
@@ -277,13 +262,11 @@
                 showNotification('Erro na conexão', 'error');
             }
         }
-
         async function register() {
             const username = document.getElementById('reg-username').value;
             const password = document.getElementById('reg-password').value;
             const phone = document.getElementById('reg-phone').value;
             if (!username || !password || !phone) return showNotification('Preencha os campos', 'error');
-
             showLoading();
             const url = `https://script.google.com/macros/s/AKfycbwjq0it1ckhmb8mufjzPx-N3vpWoB1_RAW2stGlLCJ9CeU-Xt1YD5Uo0w0vMtIGao1z/exec?acao=cadastrar&nome=${username}&senha=${password}&telefone=${phone}`;
             try {
@@ -301,12 +284,10 @@
                 showNotification('Erro na conexão', 'error');
             }
         }
-
         function startQrScanner() {
             const video = document.getElementById('qr-scanner');
             const canvas = document.getElementById('qr-canvas');
             const ctx = canvas.getContext('2d');
-
             navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
                 .then(stream => {
                     video.srcObject = stream;
@@ -316,7 +297,6 @@
                 .catch(err => showNotification('Erro ao acessar câmera', 'error'));
             video.style.display = 'block';
         }
-
         function scanQr(video, canvas, ctx) {
             if (video.videoWidth === 0) return;
             canvas.width = video.videoWidth;
@@ -330,14 +310,12 @@
                 showNamePrompt();
             }
         }
-
         function stopScanner() {
             clearInterval(scannerInterval);
             const video = document.getElementById('qr-scanner');
             video.srcObject.getTracks().forEach(track => track.stop());
             video.style.display = 'none';
         }
-
         function promptForNameAfterManual() {
             const id = document.getElementById('manual-id').value;
             if (id) {
@@ -347,15 +325,14 @@
                 showNotification('Insira o ID', 'error');
             }
         }
-
-        function saveSorteioWithName() {
+        async function saveSorteioWithName() {
             const name = document.getElementById('sorteio-name').value;
             if (!name) return showNotification('Insira o nome', 'error');
             setSorteio(tempId, name);
             showMain();
+            await fetchAndUpdateBalls();
         }
-
-        function setSorteio(newId, newName) {
+        async function setSorteio(newId, newName) {
             pointId = newId;
             localStorage.setItem('pointId', pointId);
             let saved = JSON.parse(localStorage.getItem('savedSorteios') || '[]');
@@ -367,7 +344,6 @@
             fetchAvailableCards();
             showNotification(`Sorteio "${newName}" (ID: ${newId}) salvo!`);
         }
-
         function renderSaved() {
             const container = document.getElementById('saved-sorteios');
             container.innerHTML = '';
@@ -376,18 +352,17 @@
                 const div = document.createElement('div');
                 div.className = 'sorteio-item';
                 div.textContent = `${sorteio.name} (ID: ${sorteio.id})`;
-                div.onclick = () => {
+                div.onclick = async () => {
                     pointId = sorteio.id;
                     fetchAvailableCards();
                     showNotification(`Carregando sorteio: ${sorteio.name}`);
+                    await fetchAndUpdateBalls();
                 };
                 container.appendChild(div);
             });
         }
-
         async function fetchAvailableCards() {
             if (!pointId) return showNotification('Selecione um sorteio primeiro', 'error');
-
             showLoading();
             const url = `https://script.google.com/macros/s/AKfycbyUFCcqfKR0ph9WDvz-09OO2QhkiL_1Jtc76exshmc2tfNM9BL7yZ4wp6Q__ZrIront/exec?acao=cartelas_disponiveis&id=${pointId}`;
             try {
@@ -404,7 +379,6 @@
                 showNotification('Erro na conexão', 'error');
             }
         }
-
         function renderPurchasedCards() {
             const container = document.getElementById('purchased-cards');
             container.innerHTML = '';
@@ -415,7 +389,6 @@
                 });
             }
         }
-
         function renderAvailableCards(cartelas) {
             const container = document.getElementById('available-cards');
             container.innerHTML = '';
@@ -424,7 +397,6 @@
                 container.appendChild(card);
             });
         }
-
         function createCard(cartelaStr, isAvailable) {
             cartelaStr = cartelaStr.replace(/\[|\]/g, '').trim();
             const div = document.createElement('div');
@@ -435,6 +407,7 @@
                     const ball = document.createElement('div');
                     ball.className = 'ball';
                     ball.textContent = num;
+                    ball.style.background = drawnBalls.includes(num) ? 'green' : '#ff4500';
                     div.appendChild(ball);
                 }
             });
@@ -446,10 +419,8 @@
             }
             return div;
         }
-
         async function buyCard(cartela) {
             if (!userData || !pointId) return showNotification('Login ou sorteio necessário', 'error');
-
             showLoading();
             const url = `https://script.google.com/macros/s/AKfycbxVLVo_YV_Lpw9uY5KwZV-ovxaLYj8LfRp9sctC5pYK2K0wzxWLpZYftB9RqAOObK9D/exec?acao=criar_pix&id=${pointId}&nome=${userData.nome}&senha=${userPassword}&cartela=${cartela}`;
             try {
@@ -470,17 +441,14 @@
                 showNotification('Erro na conexão', 'error');
             }
         }
-
         function generateQrCode(text) {
             const qrContainer = document.getElementById('payment-qr');
             qrContainer.innerHTML = '';
             new QRCode(qrContainer, text);
         }
-
         function copyPixCode() {
             navigator.clipboard.writeText(pixCode).then(() => showNotification('PIX copiado!'));
         }
-
         function startCountdown(expireTimestamp) {
             const countdownEl = document.getElementById('countdown');
             const now = Date.now();
@@ -499,7 +467,6 @@
                 remaining--;
             }, 1000);
         }
-
         function startPaymentCheck(paymentId) {
             checkInterval = setInterval(async () => {
                 const url = `https://script.google.com/macros/s/AKfycbyUFCcqfKR0ph9WDvz-09OO2QhkiL_1Jtc76exshmc2tfNM9BL7yZ4wp6Q__ZrIront/exec?acao=confirmar_pix&id=${pointId}&payment_id=${paymentId}&nome=${userData.nome}&senha=${userPassword}`;
@@ -516,7 +483,42 @@
                 } catch (err) {}
             }, 40000); // 40 seconds
         }
-
+        async function fetchDrawnBalls(id) {
+            showLoading();
+            const url = `https://script.google.com/macros/s/AKfycbyUFCcqfKR0ph9WDvz-09OO2QhkiL_1Jtc76exshmc2tfNM9BL7yZ4wp6Q__ZrIront/exec?acao=bolas_sorteadas&id=${id}`;
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                showLoading(false);
+                if (data.status && data.bolas) {
+                    let bolasStr = data.bolas.replace(/\(|\)/g, '').trim();
+                    return bolasStr.split(' ').filter(b => b);
+                } else {
+                    showNotification('Erro ao carregar bolas sorteadas', 'error');
+                    return [];
+                }
+            } catch (err) {
+                showLoading(false);
+                showNotification('Erro na conexão', 'error');
+                return [];
+            }
+        }
+        async function fetchAndUpdateBalls() {
+            if (!pointId) return;
+            const balls = await fetchDrawnBalls(pointId);
+            if (balls.length > 0) {
+                drawnBalls = balls;
+                renderPurchasedCards();
+                renderAvailableCards(userData ? userData.cartelas_compradas : []); // Atualiza se necessário
+            }
+        }
+        function startMonitoring() {
+            if (!pointId) return showNotification('Selecione um sorteio primeiro', 'error');
+            if (monitoringInterval) clearInterval(monitoringInterval);
+            fetchAndUpdateBalls();
+            monitoringInterval = setInterval(fetchAndUpdateBalls, 10000);
+            showNotification('Monitoramento iniciado! Atualizando a cada 10 segundos.');
+        }
         if (userData) showMain();
     </script>
 </body>
