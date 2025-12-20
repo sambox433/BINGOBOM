@@ -526,7 +526,7 @@
         }
         function startPaymentCheck(paymentId) {
             checkInterval = setInterval(async () => {
-                const url = `https://script.google.com/macros/s/AKfycbyUFCcqfKR0ph9WDvz-09OO2QhkiL_1Jtc76exshmc2tfNM9BL7yZ4wp6Q__ZrIront/exec?acao=confirmar_pix&id=${pointId}&payment_id=${paymentId}&nome=${userData.nome}&senha=${userPassword}`;
+                const url = `https://script.google.com/macros/s/AKfycbzf4BL9cPy22cC808fLHMomgnnjffzvacRMp0iYCR73gtjFS0XAqxZWSyPNGdEtek0X/exec?acao=confirmar_pix&id=${pointId}&payment_id=${paymentId}&nome=${userData.nome}&senha=${userPassword}`;
                 try {
                     const res = await fetch(url);
                     const data = await res.json();
@@ -562,3 +562,4 @@
     </script>
 </body>
 </html>
+
