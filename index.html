@@ -176,7 +176,7 @@
             <canvas id="qr-canvas" style="display:none;"></canvas>
             <h2>Sorteios Salvos</h2>
             <div id="saved-sorteios"></div>
-            <button onclick="startMonitoring()">Monitorar Sorteio (Atualiza a cada 30s)</button>
+            <button id="auto-btn" onclick="toggleAuto()">Ativar Verificação Automática (a cada 10s)</button>
             <div class="card-section">
                 <h2>Cartelas Compradas</h2>
                 <div id="purchased-cards"></div>
@@ -213,6 +213,8 @@
         let pixCode = '';
         let drawnBalls = [];
         let monitoringInterval = null;
+        let autoMode = false;
+        let manualDrawn = [];
         const API_URL = 'https://script.google.com/macros/s/AKfycbz0QT61hVX-h35nLIvytrKGC33TnLXzi_F4mWoN0BaJZEpnLKNVh2kyzpMSGS_Sb3zi/exec';
         function showNotification(message, type = 'success') {
             const notif = document.getElementById('notification');
@@ -440,13 +442,21 @@
             const div = document.createElement('div');
             div.className = isAvailable ? 'card' : 'neo-card';
             const numbers = cartelaStr.split(' ');
+            const usedBalls = autoMode ? drawnBalls : manualDrawn;
             numbers.forEach(num => {
                 num = num.trim();
                 if (num) {
                     const ball = document.createElement('div');
                     ball.className = 'ball';
                     ball.textContent = num;
-                    ball.style.background = drawnBalls.includes(num) ? 'green' : '#ff4500';
+                    ball.style.background = usedBalls.includes(num) ? 'green' : '#ff4500';
+                    if (!isAvailable) {
+                        ball.onclick = function() {
+                            if (!autoMode) {
+                                toggleMark(num);
+                            }
+                        };
+                    }
                     div.appendChild(ball);
                 }
             });
@@ -457,6 +467,14 @@
                 div.appendChild(buyBtn);
             }
             return div;
+        }
+        function toggleMark(num) {
+            if (manualDrawn.includes(num)) {
+                manualDrawn = manualDrawn.filter(n => n !== num);
+            } else {
+                manualDrawn.push(num);
+            }
+            renderPurchasedCards();
         }
         async function buyCard(cartela) {
             if (!userData || !pointId) return showNotification('Login ou sorteio necessário', 'error');
@@ -523,12 +541,22 @@
                 } catch (err) {}
             }, 40000); // 40 seconds
         }
-        function startMonitoring() {
-            if (!pointId) return showNotification('Selecione um sorteio primeiro', 'error');
-            if (monitoringInterval) clearInterval(monitoringInterval);
-            fetchSorteioData();
-            monitoringInterval = setInterval(fetchSorteioData, 30000);
-            showNotification('Monitoramento iniciado! Atualizando a cada 30 segundos.');
+        function toggleAuto() {
+            if (autoMode) {
+                clearInterval(monitoringInterval);
+                manualDrawn = [...drawnBalls];
+                autoMode = false;
+                document.getElementById('auto-btn').textContent = 'Ativar Verificação Automática (a cada 10s)';
+                showNotification('Modo manual ativado. Clique nos números para marcar.');
+                renderPurchasedCards();
+            } else {
+                autoMode = true;
+                fetchSorteioData();
+                monitoringInterval = setInterval(fetchSorteioData, 10000);
+                document.getElementById('auto-btn').textContent = 'Desativar Verificação Automática';
+                showNotification('Modo automático ativado! Atualizando a cada 10 segundos.');
+                renderPurchasedCards();
+            }
         }
         if (userData) showMain();
     </script>
