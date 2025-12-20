@@ -176,7 +176,7 @@
             <canvas id="qr-canvas" style="display:none;"></canvas>
             <h2>Sorteios Salvos</h2>
             <div id="saved-sorteios"></div>
-            <button onclick="startMonitoring()">Monitorar Sorteio (Atualiza a cada 10s)</button>
+            <button onclick="startMonitoring()">Monitorar Sorteio (Atualiza a cada 30s)</button>
             <div class="card-section">
                 <h2>Cartelas Compradas</h2>
                 <div id="purchased-cards"></div>
@@ -213,6 +213,7 @@
         let pixCode = '';
         let drawnBalls = [];
         let monitoringInterval = null;
+        const API_URL = 'https://script.google.com/macros/s/AKfycbz0QT61hVX-h35nLIvytrKGC33TnLXzi_F4mWoN0BaJZEpnLKNVh2kyzpMSGS_Sb3zi/exec';
         function showNotification(message, type = 'success') {
             const notif = document.getElementById('notification');
             notif.textContent = message;
@@ -242,7 +243,7 @@
                 renderPurchasedCards();
             }
             if (pointId) {
-                fetchAvailableCards();
+                fetchSorteioData();
             }
         }
         function showPayment() {
@@ -266,7 +267,7 @@
                     userPassword = password;
                     showMain();
                     if (pointId) {
-                        await fetchAndUpdateBalls();
+                        await fetchSorteioData();
                     }
                 } else {
                     showNotification('Login falhou', 'error');
@@ -344,7 +345,7 @@
             if (!name) return showNotification('Insira o nome', 'error');
             await setSorteio(tempId, name);
             showMain();
-            await fetchAndUpdateBalls();
+            await fetchSorteioData();
         }
         async function setSorteio(newId, newName) {
             pointId = newId;
@@ -355,7 +356,7 @@
                 localStorage.setItem('savedSorteios', JSON.stringify(saved));
                 renderSaved();
             }
-            await fetchAvailableCards();
+            await fetchSorteioData();
             showNotification(`Sorteio "${newName}" (ID: ${newId}) salvo!`);
         }
         function renderSaved() {
@@ -370,9 +371,8 @@
                 textSpan.style.cursor = 'pointer';
                 textSpan.onclick = async () => {
                     pointId = sorteio.id;
-                    await fetchAvailableCards();
+                    await fetchSorteioData();
                     showNotification(`Carregando sorteio: ${sorteio.name}`);
-                    await fetchAndUpdateBalls();
                 };
                 div.appendChild(textSpan);
                 const removeBtn = document.createElement('button');
@@ -397,18 +397,20 @@
             renderSaved();
             showNotification('Sorteio removido!');
         }
-        async function fetchAvailableCards() {
+        async function fetchSorteioData() {
             if (!pointId) return showNotification('Selecione um sorteio primeiro', 'error');
             showLoading();
-            const url = `https://script.google.com/macros/s/AKfycbyUFCcqfKR0ph9WDvz-09OO2QhkiL_1Jtc76exshmc2tfNM9BL7yZ4wp6Q__ZrIront/exec?acao=cartelas_disponiveis&id=${pointId}`;
+            const url = `${API_URL}?acao=consultar&id=${pointId}`;
             try {
                 const res = await fetch(url);
                 const data = await res.json();
                 showLoading(false);
                 if (data.status) {
-                    renderAvailableCards(data.cartelas_disponiveis);
+                    drawnBalls = data.bolas_saidas.flatMap(s => s.split(' ').filter(b => b.trim()).map(b => b.trim()));
+                    renderAvailableCards(data.cartelas_a_venda);
+                    renderPurchasedCards();
                 } else {
-                    showNotification('Erro ao carregar cartelas', 'error');
+                    showNotification('Erro ao carregar dados', 'error');
                 }
             } catch (err) {
                 showLoading(false);
@@ -515,47 +517,18 @@
                         clearInterval(paymentTimer);
                         showNotification('Pagamento confirmado!', 'success');
                         await login(); // Relogin para atualizar userData com novas cartelas
-                        await fetchAndUpdateBalls(); // Atualiza bolas e marca nas cartelas
+                        await fetchSorteioData(); // Atualiza bolas e marca nas cartelas
                         showMain(); // Retorna para a tela principal com cartelas atualizadas
                     }
                 } catch (err) {}
             }, 40000); // 40 seconds
         }
-        async function fetchDrawnBalls(id) {
-            showLoading();
-            const url = `https://script.google.com/macros/s/AKfycbyUFCcqfKR0ph9WDvz-09OO2QhkiL_1Jtc76exshmc2tfNM9BL7yZ4wp6Q__ZrIront/exec?acao=bolas_sorteadas&id=${id}`;
-            try {
-                const res = await fetch(url);
-                const data = await res.json();
-                showLoading(false);
-                if (data.status && data.bolas) {
-                    let bolasStr = data.bolas.replace(/\(|\)/g, '').trim();
-                    return bolasStr.split(' ').filter(b => b).map(b => b.trim());
-                } else {
-                    showNotification('Erro ao carregar bolas sorteadas', 'error');
-                    return [];
-                }
-            } catch (err) {
-                showLoading(false);
-                showNotification('Erro na conexão', 'error');
-                return [];
-            }
-        }
-        async function fetchAndUpdateBalls() {
-            if (!pointId) return;
-            const balls = await fetchDrawnBalls(pointId);
-            if (balls.length > 0) {
-                drawnBalls = balls;
-            }
-            renderPurchasedCards();
-            await fetchAvailableCards(); // Re-fetch e renderiza disponíveis com bolas atualizadas
-        }
         function startMonitoring() {
             if (!pointId) return showNotification('Selecione um sorteio primeiro', 'error');
             if (monitoringInterval) clearInterval(monitoringInterval);
-            fetchAndUpdateBalls();
-            monitoringInterval = setInterval(fetchAndUpdateBalls, 10000);
-            showNotification('Monitoramento iniciado! Atualizando a cada 10 segundos.');
+            fetchSorteioData();
+            monitoringInterval = setInterval(fetchSorteioData, 30000);
+            showNotification('Monitoramento iniciado! Atualizando a cada 30 segundos.');
         }
         if (userData) showMain();
     </script>
