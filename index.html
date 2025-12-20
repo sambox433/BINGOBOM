@@ -176,7 +176,7 @@
             <canvas id="qr-canvas" style="display:none;"></canvas>
             <h2>Sorteios Salvos</h2>
             <div id="saved-sorteios"></div>
-            <button onclick="startMonitoring()">Monitorar Sorteio (Atualiza a cada 20s)</button>
+            <button onclick="startMonitoring()">Monitorar Sorteio (Atualiza a cada 10s)</button>
             <div class="card-section">
                 <h2>Cartelas Compradas</h2>
                 <div id="purchased-cards"></div>
@@ -211,9 +211,8 @@
         let paymentTimer = null;
         let checkInterval = null;
         let pixCode = '';
-        let drawnBalls = []; // Armazena como strings com zero à esquerda (ex: "01", "10")
+        let drawnBalls = [];
         let monitoringInterval = null;
-
         function showNotification(message, type = 'success') {
             const notif = document.getElementById('notification');
             notif.textContent = message;
@@ -229,8 +228,12 @@
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
             document.getElementById(screenId).classList.add('active');
         }
-        function showLogin() { showScreen('login-screen'); }
-        function showRegister() { showScreen('register-screen'); }
+        function showLogin() {
+            showScreen('login-screen');
+        }
+        function showRegister() {
+            showScreen('register-screen');
+        }
         function showMain() {
             showScreen('main-screen');
             renderSaved();
@@ -242,9 +245,12 @@
                 fetchAvailableCards();
             }
         }
-        function showPayment() { showScreen('payment-screen'); }
-        function showNamePrompt() { showScreen('name-prompt-screen'); }
-
+        function showPayment() {
+            showScreen('payment-screen');
+        }
+        function showNamePrompt() {
+            showScreen('name-prompt-screen');
+        }
         async function login() {
             const username = document.getElementById('login-username').value;
             const password = document.getElementById('login-password').value;
@@ -260,7 +266,7 @@
                     userPassword = password;
                     showMain();
                     if (pointId) {
-                        await fetchAndUpdateBalls(); // Busca bolas ao logar se já tiver sorteio
+                        await fetchAndUpdateBalls();
                     }
                 } else {
                     showNotification('Login falhou', 'error');
@@ -270,9 +276,6 @@
                 showNotification('Erro na conexão', 'error');
             }
         }
-
-        // register, QR scanner, etc... (tudo igual ao original)
-
         async function register() {
             const username = document.getElementById('reg-username').value;
             const password = document.getElementById('reg-password').value;
@@ -295,15 +298,40 @@
                 showNotification('Erro na conexão', 'error');
             }
         }
-
-        // Funções de QR e seleção de sorteio (mantidas com chamada ao fetchAndUpdateBalls)
-
-        function startQrScanner() { /* igual ao original */ }
-        function scanQr(video, canvas, ctx) { /* igual */ }
-        function stopScanner() { /* igual */ }
-
+        function startQrScanner() {
+            const video = document.getElementById('qr-scanner');
+            const canvas = document.getElementById('qr-canvas');
+            const ctx = canvas.getContext('2d');
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+                .then(stream => {
+                    video.srcObject = stream;
+                    video.play();
+                    scannerInterval = setInterval(() => scanQr(video, canvas, ctx), 100);
+                })
+                .catch(err => showNotification('Erro ao acessar câmera', 'error'));
+            video.style.display = 'block';
+        }
+        function scanQr(video, canvas, ctx) {
+            if (video.videoWidth === 0) return;
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+            if (code) {
+                tempId = code.data;
+                stopScanner();
+                showNamePrompt();
+            }
+        }
+        function stopScanner() {
+            clearInterval(scannerInterval);
+            const video = document.getElementById('qr-scanner');
+            video.srcObject.getTracks().forEach(track => track.stop());
+            video.style.display = 'none';
+        }
         function promptForNameAfterManual() {
-            const id = document.getElementById('manual-id').value.trim();
+            const id = document.getElementById('manual-id').value;
             if (id) {
                 tempId = id;
                 showNamePrompt();
@@ -311,15 +339,13 @@
                 showNotification('Insira o ID', 'error');
             }
         }
-
         async function saveSorteioWithName() {
-            const name = document.getElementById('sorteio-name').value.trim();
+            const name = document.getElementById('sorteio-name').value;
             if (!name) return showNotification('Insira o nome', 'error');
             await setSorteio(tempId, name);
             showMain();
-            await fetchAndUpdateBalls(); // Busca bolas após salvar
+            await fetchAndUpdateBalls();
         }
-
         async function setSorteio(newId, newName) {
             pointId = newId;
             localStorage.setItem('pointId', pointId);
@@ -332,7 +358,6 @@
             await fetchAvailableCards();
             showNotification(`Sorteio "${newName}" (ID: ${newId}) salvo!`);
         }
-
         function renderSaved() {
             const container = document.getElementById('saved-sorteios');
             container.innerHTML = '';
@@ -345,10 +370,9 @@
                 textSpan.style.cursor = 'pointer';
                 textSpan.onclick = async () => {
                     pointId = sorteio.id;
-                    localStorage.setItem('pointId', pointId);
                     await fetchAvailableCards();
-                    await fetchAndUpdateBalls(); // Busca bolas ao clicar no salvo
-                    showNotification(`Sorteio carregado: ${sorteio.name}`);
+                    showNotification(`Carregando sorteio: ${sorteio.name}`);
+                    await fetchAndUpdateBalls();
                 };
                 div.appendChild(textSpan);
                 const removeBtn = document.createElement('button');
@@ -359,26 +383,70 @@
                 container.appendChild(div);
             });
         }
-
-        // removeSorteio, fetchAvailableCards, renderPurchasedCards, renderAvailableCards (iguais)
-
+        function removeSorteio(id) {
+            let saved = JSON.parse(localStorage.getItem('savedSorteios') || '[]');
+            saved = saved.filter(s => s.id !== id);
+            localStorage.setItem('savedSorteios', JSON.stringify(saved));
+            if (pointId === id) {
+                pointId = null;
+                localStorage.removeItem('pointId');
+                drawnBalls = [];
+                document.getElementById('purchased-cards').innerHTML = '';
+                document.getElementById('available-cards').innerHTML = '';
+            }
+            renderSaved();
+            showNotification('Sorteio removido!');
+        }
+        async function fetchAvailableCards() {
+            if (!pointId) return showNotification('Selecione um sorteio primeiro', 'error');
+            showLoading();
+            const url = `https://script.google.com/macros/s/AKfycbyUFCcqfKR0ph9WDvz-09OO2QhkiL_1Jtc76exshmc2tfNM9BL7yZ4wp6Q__ZrIront/exec?acao=cartelas_disponiveis&id=${pointId}`;
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                showLoading(false);
+                if (data.status) {
+                    renderAvailableCards(data.cartelas_disponiveis);
+                } else {
+                    showNotification('Erro ao carregar cartelas', 'error');
+                }
+            } catch (err) {
+                showLoading(false);
+                showNotification('Erro na conexão', 'error');
+            }
+        }
+        function renderPurchasedCards() {
+            const container = document.getElementById('purchased-cards');
+            container.innerHTML = '';
+            if (userData && userData.cartelas_compradas) {
+                userData.cartelas_compradas.forEach(cartela => {
+                    const card = createCard(cartela, false);
+                    container.appendChild(card);
+                });
+            }
+        }
+        function renderAvailableCards(cartelas) {
+            const container = document.getElementById('available-cards');
+            container.innerHTML = '';
+            cartelas.forEach(cartela => {
+                const card = createCard(cartela, true);
+                container.appendChild(card);
+            });
+        }
         function createCard(cartelaStr, isAvailable) {
             cartelaStr = cartelaStr.replace(/\[|\]/g, '').trim();
             const div = document.createElement('div');
             div.className = isAvailable ? 'card' : 'neo-card';
-            const numbers = cartelaStr.split(' ').map(n => n.trim()).filter(n => n);
+            const numbers = cartelaStr.split(' ');
             numbers.forEach(num => {
-                const ball = document.createElement('div');
-                ball.className = 'ball';
-                // Mostra com zero à esquerda se tiver (ex: 01 → 01, 1 → 1)
-                ball.textContent = num.padStart(2, '0');
-                // Compara com zero à esquerda para garantir match (ex: "1" e "01" viram "01")
-                if (drawnBalls.includes(num.padStart(2, '0'))) {
-                    ball.style.background = 'green';
-                } else {
-                    ball.style.background = '#ff4500';
+                num = num.trim();
+                if (num) {
+                    const ball = document.createElement('div');
+                    ball.className = 'ball';
+                    ball.textContent = num;
+                    ball.style.background = drawnBalls.includes(num) ? 'green' : '#ff4500';
+                    div.appendChild(ball);
                 }
-                div.appendChild(ball);
             });
             if (isAvailable) {
                 const buyBtn = document.createElement('button');
@@ -388,44 +456,107 @@
             }
             return div;
         }
-
-        // buyCard, generateQrCode, copyPixCode, startCountdown, startPaymentCheck (iguais)
-
-        // *** NOVA FUNÇÃO CORRIGIDA PARA A API CERTA ***
-        async function fetchDrawnBalls(id) {
-            const url = `https://script.google.com/macros/s/AKfycbz0QT61hVX-h35nLIvytrKGC33TnLXzi_F4mWoN0BaJZEpnLKNVh2kyzpMSGS_Sb3zi/exec?acao=consultar&id=${id}`;
+        async function buyCard(cartela) {
+            if (!userData || !pointId) return showNotification('Login ou sorteio necessário', 'error');
+            showLoading();
+            const url = `https://script.google.com/macros/s/AKfycbxVLVo_YV_Lpw9uY5KwZV-ovxaLYj8LfRp9sctC5pYK2K0wzxWLpZYftB9RqAOObK9D/exec?acao=criar_pix&id=${pointId}&nome=${userData.nome}&senha=${userPassword}&cartela=${cartela}`;
             try {
                 const res = await fetch(url);
                 const data = await res.json();
-                if (data.status && data.numeros) {
-                    let bolasStr = data.numeros.replace(/\(|\)/g, '').trim();
-                    return bolasStr.split(' ')
-                        .filter(b => b.trim())
-                        .map(b => b.trim().padStart(2, '0')); // Garante "01", "02", etc.
+                showLoading(false);
+                if (data.status) {
+                    pixCode = data.dados.pix_copia_cola;
+                    generateQrCode(pixCode);
+                    showPayment();
+                    startCountdown(data.dados.expira_em);
+                    startPaymentCheck(data.dados.payment_id);
+                } else {
+                    showNotification('Erro ao criar PIX', 'error');
                 }
-                return [];
             } catch (err) {
-                console.error(err);
-                return drawnBalls; // Mantém as anteriores em caso de erro
+                showLoading(false);
+                showNotification('Erro na conexão', 'error');
             }
         }
-
+        function generateQrCode(text) {
+            const qrContainer = document.getElementById('payment-qr');
+            qrContainer.innerHTML = '';
+            new QRCode(qrContainer, text);
+        }
+        function copyPixCode() {
+            navigator.clipboard.writeText(pixCode).then(() => showNotification('PIX copiado!'));
+        }
+        function startCountdown(expireTimestamp) {
+            const countdownEl = document.getElementById('countdown');
+            const now = Date.now();
+            let remaining = Math.max(0, (expireTimestamp - now) / 1000);
+            if (remaining > 420) remaining = 420; // Max 7 min
+            paymentTimer = setInterval(() => {
+                if (remaining <= 0) {
+                    clearInterval(paymentTimer);
+                    showNotification('Tempo expirado', 'error');
+                    showMain();
+                    return;
+                }
+                const min = Math.floor(remaining / 60);
+                const sec = Math.floor(remaining % 60);
+                countdownEl.textContent = `Expira em: ${min}:${sec < 10 ? '0' : ''}${sec}`;
+                remaining--;
+            }, 1000);
+        }
+        function startPaymentCheck(paymentId) {
+            checkInterval = setInterval(async () => {
+                const url = `https://script.google.com/macros/s/AKfycbyUFCcqfKR0ph9WDvz-09OO2QhkiL_1Jtc76exshmc2tfNM9BL7yZ4wp6Q__ZrIront/exec?acao=confirmar_pix&id=${pointId}&payment_id=${paymentId}&nome=${userData.nome}&senha=${userPassword}`;
+                try {
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    if (data.status && data.dados.mensagem === 'Pagamento confirmado e cartela liberada') {
+                        clearInterval(checkInterval);
+                        clearInterval(paymentTimer);
+                        showNotification('Pagamento confirmado!', 'success');
+                        await login(); // Relogin para atualizar userData com novas cartelas
+                        await fetchAndUpdateBalls(); // Atualiza bolas e marca nas cartelas
+                        showMain(); // Retorna para a tela principal com cartelas atualizadas
+                    }
+                } catch (err) {}
+            }, 40000); // 40 seconds
+        }
+        async function fetchDrawnBalls(id) {
+            showLoading();
+            const url = `https://script.google.com/macros/s/AKfycbyUFCcqfKR0ph9WDvz-09OO2QhkiL_1Jtc76exshmc2tfNM9BL7yZ4wp6Q__ZrIront/exec?acao=bolas_sorteadas&id=${id}`;
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                showLoading(false);
+                if (data.status && data.bolas) {
+                    let bolasStr = data.bolas.replace(/\(|\)/g, '').trim();
+                    return bolasStr.split(' ').filter(b => b).map(b => b.trim());
+                } else {
+                    showNotification('Erro ao carregar bolas sorteadas', 'error');
+                    return [];
+                }
+            } catch (err) {
+                showLoading(false);
+                showNotification('Erro na conexão', 'error');
+                return [];
+            }
+        }
         async function fetchAndUpdateBalls() {
             if (!pointId) return;
             const balls = await fetchDrawnBalls(pointId);
-            drawnBalls = balls; // Agora com formato "01", "02", "10"...
+            if (balls.length > 0) {
+                drawnBalls = balls;
+            }
             renderPurchasedCards();
-            await fetchAvailableCards(); // Re-renderiza com marcação correta
+            await fetchAvailableCards(); // Re-fetch e renderiza disponíveis com bolas atualizadas
         }
-
         function startMonitoring() {
             if (!pointId) return showNotification('Selecione um sorteio primeiro', 'error');
             if (monitoringInterval) clearInterval(monitoringInterval);
             fetchAndUpdateBalls();
-            monitoringInterval = setInterval(fetchAndUpdateBalls, 20000); // 20 segundos
-            showNotification('Monitoramento iniciado! Atualizando a cada 20 segundos.');
+            monitoringInterval = setInterval(fetchAndUpdateBalls, 10000);
+            showNotification('Monitoramento iniciado! Atualizando a cada 10 segundos.');
         }
-
         if (userData) showMain();
     </script>
 </body>
